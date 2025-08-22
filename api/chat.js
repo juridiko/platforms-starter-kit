@@ -4,7 +4,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message } = req.body;
+    // Läs request-body manuellt
+    const body = await new Promise((resolve, reject) => {
+      let data = "";
+      req.on("data", (chunk) => {
+        data += chunk;
+      });
+      req.on("end", () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+
+    const { message } = body;
+
+    if (!message) {
+      return res.status(400).json({ error: "Missing 'message' in body" });
+    }
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

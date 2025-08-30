@@ -1,48 +1,44 @@
+// api/chat.js
+import OpenAI from "openai";
+
 export default async function handler(req, res) {
+  // Tillåt CORS
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // Om det är en preflight (OPTIONS), svara direkt
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Only POST requests allowed" });
+    return res.status(405).json({ message: "Only POST requests allowed" });
   }
 
   try {
-    // Läs request-body manuellt
-    const body = await new Promise((resolve, reject) => {
-      let data = "";
-      req.on("data", (chunk) => {
-        data += chunk;
-      });
-      req.on("end", () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (err) {
-          reject(err);
-        }
-      });
+    const { message } = req.body;
+
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const { message } = body;
-
-    if (!message) {
-      return res.status(400).json({ error: "Missing 'message' in body" });
-    }
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: message }],
-      }),
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "Du är en digital juridisk assistent som hjälper människor i Sverige. Du kan ge information men inte juridiska garantier. Var tydlig, enkel och professionell.",
+        },
+        { role: "user", content: message },
+      ],
     });
 
-    const data = await response.json();
-
-    return res.status(200).json({
-      reply: data.choices?.[0]?.message?.content || "Inget svar från AI:n",
-    });
+    const reply = completion.choices[0].message.content;
+    res.status(200).json({ reply });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error("Error in AI handler:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 }
